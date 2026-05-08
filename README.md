@@ -1,80 +1,138 @@
-# go-broccli
+# broccli
 
-----
+## ⚠️ Project Status: Unmaintained
 
-The nicholasgasior/broccli package simplifies command line interface management. It allows you to define commands complete with arguments and flags, and attach handlers to them. The package handles all the parsing automatically.
+This project is no longer actively maintained. While it may still work for existing users, no new features or bug fixes will be added.
 
-----
+Feel free to fork this repository if you'd like to continue development.
 
-### Install
+[broccli](broccli.png "broccli")
 
-Ensure you have your
-[workspace directory](https://golang.org/doc/code.html#Workspaces) created and
-run the following:
+The `broccli/v3` package simplifies command line interface management. It allows you to define commands complete with arguments and flags, and attach handlers to them. The package handles all the parsing automatically.
 
+:warning: `v3` is not compatible with `v2`. The latest version requires a context in handlers and when calling `Run` method. Also
+methods for adding commands, args etc. have been shortened to `Command`, `Arg`, `Flag` and `Env`.
+
+
+## Table of Contents
+
+* [Sample code](#sample-code)
+* [Structs explained](#structs-explained)
+  * [CLI](#cli)
+  * [Commands](#commands)
+  * [Flags and Arguments](#flags-and-arguments)
+  * [Environment variables to check](#environment-variables-to-check)
+  * [Accessing flag and arg values](#accessing-flag-and-arg-values)
+* [Features + Roadmap](#features)
+
+## Sample code
+Example dummy application can be found in `cmd/example1` directory.
+
+However, the following code snippet from another tiny project shows how the module can be used.
+
+Import the code with the following URL:
+```go
+import "github.com/mikolajgasior/broccli/v3"
 ```
-go get -u github.com/nicholasgasior/go-broccli/v2
-```
 
-### Example
+```go
+// create new CLI object
+cli := broccli.NewBroccli("snakey-letters", "Classic snake but with letters and words!", "")
 
-Let's start with an example covering everything. First, let's create main
-`CLI` instance and commands:
+// add a command and attach a function to it
+cmd := cli.Command("start", "Starts the game", startHandler)
+// add a flag to the command
+cmd.Flag("words", "f", "", 
+    "Text file with wordlist", 
+    // should be a path to a file
+    broccli.TypePathFile,
+    // flag is required (cannot be empty) and path must exist
+    broccli.IsExistent|broccli.IsRequired,
+)
 
-```
-func main() {
-    myCLI := broccli.NewCLI("Example", "App", "Author <a@example.com>")
+// add another command to print version number
+_ = cli.Command("version", "Shows version", versionHandler)
 
-    print := myCLI.AddCmd("print", "Prints out flags", func(c *CLI) int {
-        fmt.Fprintf(os.Stdout, "Printing on the screen:\n%s\n%s\n\n", c.Flag("text1"), c.Arg("text2"))
-        return 2
-    })
-    template := myCLI.AddCmd("template", "Process template", func(c *CLI) int {
-        fmt.Fprintf(os.Stdout, "Do something here")
-        return 0
-    })
-    start := myCLI.AddCmd("start", "Start the game", func(c *CLI) int {
-        fmt.Fprintf(os.Stdout, "Do something here")
-        return 0
-    })
+// run cli
+os.Exit(cli.Run(context.Background()))
+
+// handlers for each command
+func startHandler(ctx context.Context, c *broccli.CLI) int {
+	fmt.Fprint(os.Stdout, "Starting with file %s...", c.Flag("words"))
+	return 0
+}
+
+func versionHandler(ctx context.Context, c *broccli.CLI) int {
+    fmt.Fprintf(os.Stdout, VERSION+"\n")
+    return 0
 }
 ```
 
-Next, let's add flags, args and required environments variables to our commands:
+## Structs explained
+### Broccli
+The main `Broccli` object has three arguments such as name, usage and author. These guys are displayed when syntax is printed out.
 
+### Commands
+Method `AddCmd` creates a new command which has the following properties.
+
+* a `name`, used to call it
+* short `usage` - few words to display what the command does on the syntax screen
+* `handler` function that is executed when the command is called and all its flags and argument are valid
+
+#### Command Options
+Optionally, after command flags and arguments are successfully validated, and just before the execution of `handler`, additional code (func) can be executed. This can be passed as a last argument.
+
+```go
+cmd := cli.Command("start", "Starts the game", startHandler, 
+    broccli.OnPostValidation(func(c *broccli.Cmd) {
+        // do something, even with the command
+    }),
+)
 ```
-    print.AddFlag("text1", "a", "Text", "Text to print", TypeString, IsRequired)
-    print.AddFlag("text2", "b", "Alphanum with dots", "Can have dots", TypeAlphanumeric, AllowDots)
-    // If '-r' is passed, the '--text2'/'-b' flag is required
-    print.AddFlag("make-text2-required", "r", "", "Make alphanumdots required", TypeBool, 0, OnTrue(func(c *Cmd) {
-        c.flags["text2"].flags = c.flags["text2"].flags | IsRequired
-    }))
 
-    template.AddFlag("template", "t", "filepath", "Path to template file", TypePathFile, IsExistent|IsRequired)
-    template.AddFlag("file-output", "o", "filepath", "Output to a specific file instead of stdout", TypePathFile, 0)
-    template.AddFlag("number", "n", "int", "Number necessary for initialisation", TypeInt, IsRequired)
+See `cmd_options.go` for all available options.
 
-    start.AddFlag("verbose", "v", "", "Verbose mode", TypeBool, 0)
-    start.AddFlag("username", "u", "username", "Username", TypeAlphanumeric, AllowDots|AllowUnderscore|IsRequired)
-    start.AddFlag("threshold", "", "1.5", "Threshold, default 1.5", TypeFloat, 0)
-    start.AddArg("input", "FILE", "Path to a file", TypePathFile, IRequired)
-    start.AddArg("difficulty", "DIFFICULTY", "Level of difficulty (1-5), default 3", TypeInt, 0)
+### Flags and Arguments
+Each command can have arguments and flags, as shown below.
+
+```txt
+program some-command -f flag1 -g flag2 ARGUMENT1 ARGUMENT2
 ```
 
-One of the arguments to AddFlag, AddArg or AddEnvVar is type of the value.  It can be one of the Type* consts, eg.
-TypeInt, TypeBool, TypeString, TypePathFile etc.
+To setup a flag in a command, method `AddFlag` is used. It takes the following arguments:
 
-Just next to the type, there is an argument that can contain additional validation flags, such as:
+* `name` and `alias` that are used to call the flag (eg. `--help` and `-h`, without the hyphens in the func args)
+* `valuePlaceholder`, a placeholder that is printed out on the syntax screen, eg. in `-f PATH_TO_FILE` it is the `PATH_TO_FILE`
+* `usage` - few words telling what the command does (syntax screen again)
+* `types`, an int64 value that defines the value type, currently one of `TypeString`, `TypeBool`, `TypeInt`, `TypeFloat`, `TypeAlphanumeric` or `TypePathFile` (see `flags.go` for more information)
+* `flags`, an int64 value containing validation requirement, eg. `IsRequired|IsExistent|IsDirectory` could be used with `TypePathFile` to require the flag to be a non-empty path to an existing directory (again, navigate to `flags.go` for more detailed information)
 
-* IsRequired when flag/arg is required;
-* AllowMultipleValues if flag/arg can have have multiple values, eg. 1,2,3, separated by comma or another character (there are flags for that such as SeparatorSemiColon etc.);
-* IsExistent which will cause a flag/arg to be checked if it exists;
-* IsRegularFile, IsDirectory, IsValidJSON and so on...
+Optionally, a function can be attached to a boolean flag that is triggered when a flag is true. The motivation behind that was a use case when setting a certain flag to true would make another string flag required. However, it's not recommended to be used.
 
-Check flags.go for more information on flag types.
+To add an argument for a command, method `Arg` shall be used. It has almost the same arguments, apart from the fact that `alias` is not there.
 
-And in the end of `main()` func:
+### Environment variables to check
+Command may require environment variables. `Env` can be called to setup environment variables that should be verified before running the command. For example, a variable might need to contain a path to an existing regular file.
 
+### Accessing flag and arg values
+See sample code that does that below.
+
+```go
+func startHandler(ctx context.Context, c *broccli.CLI) int {
+	fmt.Fprint(os.Stdout, "Starting with level %s...", c.Arg("level"))
+    fmt.Fprint(os.Stdout, "Writing moves to file %s...", c.Flag("somefile"))
+	return 0
+}
 ```
-    os.Exit(myCLI.Run())
-```
+
+`level` and `somefile` are `name`s of the argument (sometimes they are uppercase) and flag.
+
+## Features
+- [X] Flags and arguments support
+- [X] Validation for basic value types such as integer, float, string, bool
+- [X] Additional value types of alpha-numeric and file path
+- [X] Validation for multiple values, separated with colon or semicolon, eg. `-t val1,val2,val3`
+- [X] Check for file existence and its type (can be directory, regular file or other)
+- [X] Post validation hook
+- [X] Boolean flag on-true hook before validation
+- [X] Handlers require context

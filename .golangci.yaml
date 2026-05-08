@@ -1,0 +1,34 @@
+version: "2"
+linters:
+  default: all
+  disable:
+    - cyclop
+    - tagliatelle
+    - testpackage
+    - exhaustruct
+  settings:
+    funlen:
+      lines: 70
+    depguard:
+      rules:
+        main:
+          allow:
+            - $gostd
+            - github.com/mikolajgasior/broccli/v3
+  exclusions:
+    generated: disable
+    rules:
+      - linters:
+          - err113
+          - exhaustruct
+          - funlen
+          - varnamelen
+          - dupl
+        path: _test.go
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+

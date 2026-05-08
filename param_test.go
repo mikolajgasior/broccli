@@ -1,17 +1,14 @@
 package broccli
 
 import (
-	"log"
 	"os"
 	"testing"
 )
 
-func h(c *CLI) int {
-	return 0
-}
-
 // TestParamValidationBasic tests basic validation for specific types.
 func TestParamValidationBasic(t *testing.T) {
+	t.Parallel()
+
 	p := &param{}
 	if p.validateValue("") != nil {
 		t.Errorf("Empty param should validate")
@@ -28,6 +25,7 @@ func TestParamValidationBasic(t *testing.T) {
 	if p.validateValue("48") != nil {
 		t.Errorf("Int param should validate")
 	}
+
 	if p.validateValue("aa") == nil {
 		t.Errorf("Int param should not validate string")
 	}
@@ -36,9 +34,11 @@ func TestParamValidationBasic(t *testing.T) {
 	if p.validateValue("48.998") != nil {
 		t.Errorf("Float param should validate")
 	}
+
 	if p.validateValue("48") == nil {
 		t.Errorf("Float param should not validate int")
 	}
+
 	if p.validateValue("aa") == nil {
 		t.Errorf("Float param should not validate string")
 	}
@@ -47,6 +47,7 @@ func TestParamValidationBasic(t *testing.T) {
 	if p.validateValue("a123aaAEz") != nil {
 		t.Errorf("Alphanumeric param should validate")
 	}
+
 	if p.validateValue("a.z") == nil {
 		t.Errorf("Alphanumeric param should not validate")
 	}
@@ -59,12 +60,15 @@ func TestParamValidationBasic(t *testing.T) {
 
 // TestParamValidationRequired tests IsRequired flag.
 func TestParamValidationRequired(t *testing.T) {
+	t.Parallel()
+
 	p := &param{
 		flags: IsRequired,
 	}
 	if p.validateValue("") == nil {
 		t.Errorf("Empty param with IsRequired should not validate")
 	}
+
 	if p.validateValue("aa") != nil {
 		t.Errorf("Param with IsRequired should validate")
 	}
@@ -73,6 +77,8 @@ func TestParamValidationRequired(t *testing.T) {
 // TestParamValidationExtraChars tests flags such as AllowUnderscore that allow TypeAlphanumeric to contain
 // extra characters.
 func TestParamValidationExtraChars(t *testing.T) {
+	t.Parallel()
+
 	p := &param{
 		valueType: TypeAlphanumeric,
 		flags:     AllowDots,
@@ -90,6 +96,7 @@ func TestParamValidationExtraChars(t *testing.T) {
 	if p.validateValue("aZ09-09") != nil {
 		t.Errorf("Alphanumeric param with extra chars should validate")
 	}
+
 	if p.validateValue("aZ09-_09") == nil {
 		t.Errorf("Alphanumeric param with extra chars should fail")
 	}
@@ -102,6 +109,8 @@ func TestParamValidationExtraChars(t *testing.T) {
 
 // TestParamValidationMultipleValues tests params that allow multiple values.
 func TestParamValidationMultipleValues(t *testing.T) {
+	t.Parallel()
+
 	p := &param{
 		valueType: TypeAlphanumeric,
 		flags:     AllowMultipleValues | AllowDots,
@@ -132,11 +141,19 @@ func TestParamValidationMultipleValues(t *testing.T) {
 // TestParamValidationFiles creates param of TypePathFile and tests additional validation flags related to checking
 // if file is a regular file, if it exists etc.
 func TestParamValidationFiles(t *testing.T) {
-	f, err := os.CreateTemp("", "example")
+	t.Parallel()
+
+	f, err := os.CreateTemp(t.TempDir(), "example")
 	if err != nil {
-		log.Fatal(err)
+		t.Errorf("error creating temporary file")
 	}
-	defer os.Remove(f.Name())
+
+	defer func() {
+		err := os.Remove(f.Name())
+		if err != nil {
+			t.Errorf("error removing temporary file")
+		}
+	}()
 
 	p := &param{
 		valueType: TypePathFile,
@@ -149,9 +166,11 @@ func TestParamValidationFiles(t *testing.T) {
 	if p.validateValue("/non-existing/path") != nil {
 		t.Errorf("PathFile param with IsNotExistent should validate")
 	}
+
 	if p.validateValue(f.Name()) == nil {
 		t.Errorf("PathFile param with IsNotExistent should fail")
 	}
+
 	if p.validateValue("") != nil {
 		t.Errorf("Empty PathFile param with IsNotExistent should validate")
 	}
@@ -160,9 +179,11 @@ func TestParamValidationFiles(t *testing.T) {
 	if p.validateValue("/non-existing/path") == nil {
 		t.Errorf("PathFile param with IsExistent should fail")
 	}
+
 	if p.validateValue(f.Name()) != nil {
 		t.Errorf("PathFile param with IsNotExistent should validate")
 	}
+
 	if p.validateValue("") != nil {
 		t.Errorf("Empty PathFile param with IsExistent should validate")
 	}
@@ -171,6 +192,7 @@ func TestParamValidationFiles(t *testing.T) {
 	if p.validateValue("") != nil {
 		t.Errorf("Empty PathFile param with IsRegularFile should validate")
 	}
+
 	if p.validateValue(f.Name()) != nil {
 		t.Errorf("PathFile param with IsRegularFile should validate")
 	}
@@ -179,6 +201,7 @@ func TestParamValidationFiles(t *testing.T) {
 	if p.validateValue("") != nil {
 		t.Errorf("Empty PathFile param with IsDirectory should validate")
 	}
+
 	if p.validateValue("") != nil {
 		t.Errorf("Empty PathFile param with IsDirectory should validate")
 	}
@@ -193,20 +216,26 @@ func TestParamValidationFiles(t *testing.T) {
 		t.Errorf("PathFile param with IsExistent should fail")
 	}
 
-	if _, err := f.Write([]byte("{\"valid\":\"json\"}")); err != nil {
-		log.Fatal(err)
+	_, err = f.WriteString("{\"valid\":\"json\"}")
+	if err != nil {
+		t.Errorf("error writing to file")
 	}
+
 	p.flags = IsExistent | IsRegularFile | IsValidJSON
 	if p.validateValue(f.Name()) != nil {
 		t.Errorf("PathFile param with IsExistent should validate")
 	}
 
-	if _, err := f.Write([]byte("in{\"valid\":\"json\"}")); err != nil {
-		log.Fatal(err)
+	_, err = f.WriteString("{\"valid\":\"json\"}")
+	if err != nil {
+		t.Errorf("error writing to file")
 	}
-	if err := f.Close(); err != nil {
-		log.Fatal(err)
+
+	err = f.Close()
+	if err != nil {
+		t.Errorf("error closing file")
 	}
+
 	p.flags = IsExistent | IsRegularFile | IsValidJSON
 	if p.validateValue(f.Name()) == nil {
 		t.Errorf("PathFile param with IsExistent should fail")

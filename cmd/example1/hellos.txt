@@ -1,0 +1,5 @@
+Hi:Hello
+Cześć:Dzień dobry
+Halo:Guten Tag
+Hei:Tere
+Moi:Hyvää päivää

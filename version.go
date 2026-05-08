@@ -1,3 +1,4 @@
 package broccli
 
-const VERSION = "2.0.0"
+// VERSION is the current version of the module.
+const VERSION = "3.3.3"

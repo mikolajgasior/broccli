@@ -1,0 +1,22 @@
+name: Run tests
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+    
+jobs:
+  main:
+    name: Build and run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Run tests
+        run: |
+          go test ./... -v -count=1
+
